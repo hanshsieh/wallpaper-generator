@@ -11,19 +11,23 @@ import (
 
 type Consumer struct {
 	dirPath string
-	widthHeightRatio float64
+	width int
+	height int
 }
 
-func NewConsumer(dirPath string, widthHeightRatio float64) *Consumer {
+func NewConsumer(dirPath string, width int, height int) *Consumer {
 	return &Consumer{
 		dirPath: dirPath,
-		widthHeightRatio: widthHeightRatio,
+		width: width,
+		height: height,
 	}
 }
 
 func (c *Consumer) PutEntry(entry *entry.Entry) error {
-	bkImg := c.createBackgroundImg(entry.Image)
-	resultImg := imaging.PasteCenter(bkImg, entry.Image)
+	props := c.createProperties(entry.Image)
+	bkImg := c.createBackgroundImg(entry.Image, props)
+	fgImg := c.createForegroundImg(entry.Image, props)
+	resultImg := imaging.PasteCenter(bkImg, fgImg)
 	filePath := path.Join(c.dirPath, entry.Name + ".jpg")
 	err := imaging.Save(resultImg, filePath, imaging.JPEGQuality(90))
 	if err != nil {
@@ -32,36 +36,40 @@ func (c *Consumer) PutEntry(entry *entry.Entry) error {
 	return nil
 }
 
-type backgroundProperties struct {
-	croppedWidth int
-	croppedHeight int
-	resizedWidth int
-	resizedHeight int
+type properties struct {
+	bkCroppedWidth  int
+	bkCroppedHeight int
+	fgWidth int
+	fgHeight int
 }
 
-func (c *Consumer) createBackgroundImg(srcImg image.Image) image.Image {
-	properties := c.createBackgroundProperties(srcImg)
-	croppedImg := imaging.CropCenter(srcImg, properties.croppedWidth, properties.croppedHeight)
-	resizedImg := imaging.Resize(croppedImg, properties.resizedWidth, properties.resizedHeight, imaging.CatmullRom)
+func (c *Consumer) createBackgroundImg(srcImg image.Image, props *properties) image.Image {
+	croppedImg := imaging.CropCenter(srcImg, props.bkCroppedWidth, props.bkCroppedHeight)
+	resizedImg := imaging.Resize(croppedImg, c.width, c.height, imaging.CatmullRom)
 	return imaging.Blur(resizedImg, 20)
 }
 
-func (c *Consumer) createBackgroundProperties(srcImg image.Image) *backgroundProperties {
+func (c *Consumer) createForegroundImg(srcImg image.Image, props *properties) image.Image {
+	return imaging.Resize(srcImg, props.fgWidth, props.fgHeight, imaging.CatmullRom)
+}
+
+func (c *Consumer) createProperties(srcImg image.Image) *properties {
 	bounds := srcImg.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-	widthHeightRatio := float64(width) / float64(height)
-	properties := &backgroundProperties{}
-	properties.croppedWidth = width
-	properties.croppedHeight = height
-	properties.resizedWidth = width
-	properties.resizedHeight = height
-	if widthHeightRatio > c.widthHeightRatio {
-		properties.croppedWidth = int(math.Round(float64(height) * c.widthHeightRatio))
-		properties.resizedHeight = int(math.Round(float64(width) / c.widthHeightRatio))
+	srcWidth := bounds.Dx()
+	srcHeight := bounds.Dy()
+	srcWidthHeightRatio := float64(srcWidth) / float64(srcHeight)
+	props := &properties{}
+	props.bkCroppedWidth = srcWidth
+	props.bkCroppedHeight = srcHeight
+	props.fgWidth = c.width
+	props.fgHeight = c.height
+	targetWidthHeightRatio := float64(c.width) / float64(c.height)
+	if srcWidthHeightRatio > targetWidthHeightRatio {
+		props.bkCroppedWidth = int(math.Round(float64(srcHeight) * targetWidthHeightRatio))
+		props.fgHeight = int(math.Round(float64(props.fgWidth) / srcWidthHeightRatio))
 	} else {
-		properties.croppedHeight = int(math.Round(float64(width) / c.widthHeightRatio))
-		properties.resizedWidth = int(math.Round(float64(height) * c.widthHeightRatio))
+		props.bkCroppedHeight = int(math.Round(float64(srcWidth) / targetWidthHeightRatio))
+		props.fgWidth = int(math.Round(float64(props.fgHeight) * srcWidthHeightRatio))
 	}
-	return properties
+	return props
 }

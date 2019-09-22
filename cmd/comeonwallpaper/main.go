@@ -22,7 +22,8 @@ func main() {
 	imgProducer := producer.NewProducer(srcDir)
 	imgConsumer := consumer.NewConsumer(
 		dstDir,
-		float64(width) / float64(height))
+		width,
+		height)
 	err = imgProducer.Start()
 	if err != nil {
 		log.Fatalf("faild to start producer: %v", err)

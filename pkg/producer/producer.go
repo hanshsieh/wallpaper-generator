@@ -24,7 +24,7 @@ const (
 )
 
 const maxScanEntries = 10
-const maxBufferedResults = 10
+const maxBufferedResults = 2
 
 type ImageProducer struct {
 	statusLock  sync.Mutex
